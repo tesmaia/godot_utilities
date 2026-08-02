@@ -1,4 +1,4 @@
-#Copyright 2019 Vulcwen
+#Copyright 2019-2026 Tesmaia
 #Permission is hereby granted, free of charge, to any person obtaining a copy of this 
 #software and associated documentation files (the "Software"), to deal in the Software 
 #without restriction, including without limitation the rights to use, copy, modify, merge, 
@@ -41,10 +41,8 @@ func allowSet(actions : Array) -> void:
 func reset():
 	InputMap.load_from_globals()
 	
-#store the inputmap to a file, ignoring specified actions
-#returns the dictionary that is saved as json
-#use an empty filename to just get the dictionary
-func save(fileName : String) -> Dictionary:
+#create a dictionary for saving
+func create_map() -> Dictionary:
 	var map = {}
 	var actions = InputMap.get_actions()
 	for action in actions:
@@ -54,21 +52,34 @@ func save(fileName : String) -> Dictionary:
 			for event in events:
 				serialized_events.push_back(serialize_event(event))
 			map[action] = serialized_events
+	return map
+	
+#save an input map, returns the error code on file-open  (OK = success)
+func save_map(map: Dictionary, fileName: String):
+	assert(fileName != null and fileName != "", "You must pass a fileName")
+	var file = File.new()
+	var error = file.open(fileName, File.WRITE)
+	if error == OK:
+		file.store_string(to_json(map))
+		file.close()
+	
+	return error
+	
+#store the inputmap to a file, ignoring specified actions
+#returns the error code on file-open (OK = success)
+func save(fileName : String):
+	var map = create_map()
 	
 	if fileName == null || fileName == "":
-		return map
-	
-	var file = File.new()
-	file.open(fileName, File.WRITE)
-	file.store_string(to_json(map))
-	file.close()
-	return map
+		return
+		
+	return save_map(map, fileName)
 
 #import a keymap from a file, adding entries to the inputmap, returns the opened json as dictionary
 func import(fileName : String) -> Dictionary:
 	var file = File.new()
 	if !file.file_exists(fileName):
-		return
+		return {}
 	file.open(fileName, File.READ)
 	var map = parse_json(file.get_as_text())
 	file.close()
@@ -80,7 +91,8 @@ func import(fileName : String) -> Dictionary:
 			var s_events = map[action]
 			for s_event in s_events:
 				var event = deserialize_event(s_event)
-				InputMap.action_add_event(action, event)
+				if event != null:
+					InputMap.action_add_event(action, event)
 	return map
 
 #serialize an event
@@ -113,6 +125,10 @@ func serialize_event(event : InputEvent) -> Dictionary:
 				index = event.button_index,
 				modifiers = modifier_mask(event)
 			}
+		_:
+			return {
+				type = "undefined"
+			}
 
 #deserialize an event
 func deserialize_event(map : Dictionary) -> InputEvent:
@@ -140,6 +156,8 @@ func deserialize_event(map : Dictionary) -> InputEvent:
 			event.device = int(map["device"])
 			event.action = int(map["index"])
 			return event
+		_:
+			return null
 
 #create a bitmask to store modifier keys
 func modifier_mask(event : InputEventWithModifiers) -> int:
